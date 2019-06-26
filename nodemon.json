@@ -1,0 +1,3 @@
+{   
+  "ignore": ["access_token.js", "./data/*"] 
+}
