@@ -1,4 +1,4 @@
-const { AsyncParser, parseAsync } = require("json2csv");
+const { AsyncParser, parseAsync, parse } = require("json2csv");
 const csv = require("csvtojson");
 
 module.exports = {
@@ -28,11 +28,12 @@ function high_to_low(a, b, prop) {
   return 0;
 }
 
-async function bars_to_csv(data, header) {
+async function bars_to_csv(data, header=false) {
   let data_length = data.length;
   let counter = 0;
-  const fields = ["open", "high", "low", "close", "datetime"];
+  const fields = ["open", "high", "low", "close", "datetime", "volume"];
   const opts = { fields, header };
+  logger.log(`header = ${opts.header}`)
   let csv = await parseAsync(data, opts)
     .then(csv => csv)
     .catch(err => console.error(err));

@@ -188,37 +188,28 @@ async function get_last_daily_data(symbol) {
 }
 
 
-async function get_minute_data(symbol, start,end) {
-  logger.log("get_minute_data");
-  /* get symbols list */
-  // let symbols = await TD_Data_Model.get_symbols_list()
-  // logger.log(symbols)
-  // logger.log(symbols.length)
-  await request_new_access_token();
+async function get_minute_data(symbol, start, end) {
+  logger.log({start, end})
+  logger.log(`get_minute_data from ${new Date(start)}, to ${new Date(end)}`);
+
 
   try {
-    /* 156 5-minute bars a day */
 
-    let now = new Date().getTime();
     const options = {
-      url: `https://api.tdameritrade.com/v1/marketdata/${symbol}/pricehistory?
-      periodType=day&
-      frequencyType=minute&
-      frequency=1&
-      startData=${start}&e
-      ndDate=${end}`,
-
+      url: `https://api.tdameritrade.com/v1/marketdata/${symbol}/pricehistory?periodType=day&frequencyType=minute&frequency=1&endDate=${end}&startData=${start}`,
       method: "get",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: `Bearer ${access_token}`
       }
     };
-    var resp = await rp(options);
-    var { candles, empty } = JSON.parse(resp);
+    logger.log(options.url)
+    let resp = await rp(options);
+    let { candles, empty } = JSON.parse(resp);
     if (empty) throw `${symbol} data is empty`;
 
-    logger.log(candles[candles.length - 1]);
+    // logger.log(candles[0]);
+    // logger.log(candles[candles.length - 1]);
     logger.log(candles.length);
     logger.log("resp");
     return candles;
