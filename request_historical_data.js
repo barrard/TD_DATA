@@ -1,11 +1,12 @@
 require("dotenv").config();
 require("./utils/logger.js");
-const {save_data} = require('./utils/files.js')
+let { bars_to_csv } = require("./utils/transform.js");
+
+const {save_data, save_fd, write_access_token, open_file} = require('./utils/files.js')
 const files = require("./utils/files.js");
 // require("./db.js");
 var request = require("request");
 const rp = require("request-promise");
-// var access_token = process.env.ACCESS_TOKEN;
 var refresh_token = process.env.REFRESH_TOKEN;
 var OAUTH_CODE = process.env.OAUTH_CODE;
 const TD_Data_Model = require("./TD_Data_Model.js");
@@ -13,17 +14,16 @@ let { access_token } = require("./access_token.js");
 // logger.log({ access_token });
 
 module.exports = {
-  request_all_movers, request_data, get_minute_data
+  request_all_movers, request_data, get_minute_data, request_historical_data
 }
 
-// request_historical_data("IBM");
 // request_historical_data('FB')
 
 // get_all_data()
 
 // get_all_previous_daily_data();
 // get_all_comodity_data_data()
-// get_minute_data('/GC')
+// get_minute_data('MSFT', 0, new Date().getTime())
 // get_last_daily_data('FB')
 
 /* Helper functions */
@@ -74,18 +74,27 @@ async function fetch_iex_symbols() {
 // /LBS
 //LIVE STOCK
 // /GF,/HE,/LE
+const commodity_data_path = symbol => `./TD_data/${symbol}/${symbol}.csv`;
+
+let COMMODITIY_SYMBOLS = ["/ES", "/GC", "/CL", "/NG", "/SI", "/ZB", "/ZN"];
 async function get_all_comodity_data_data() {
-  let SYMBOLS = ["/ES", "/GC", "/CL", "/NG", "/SI", "/ZB", "/ZN"];
 
   var counter = -1;
-  var total = SYMBOLS.length;
+  var total = COMMODITIY_SYMBOLS.length;
   let timer = setInterval(async () => {
+    if(counter == COMMODITIY_SYMBOLS.length) clearInterval(timer)
     counter++;
-    const symbol = SYMBOLS[counter];
+    const symbol = COMMODITIY_SYMBOLS[counter];
     logger.log(`counter = ${counter} requesting ${symbol}`);
 
     let daily_data = await request_historical_data(symbol);
-    TD_Data_Model.create_daily_data(symbol, daily_data);
+    /* Save CSV file */
+    let { csv_file_data, appendable_fd } = await open_file(commodity_data_path(symbol));
+
+    // save_data('TD_data','comodities', 'comodities.json', JSON.stringify(daily_data), false)
+    let csv_data = await bars_to_csv(daily_data, true); //header is false here
+    save_fd(appendable_fd, csv_data);
+    // TD_Data_Model.create_daily_data(symbol, daily_data);
   }, 1000);
 }
 
@@ -136,6 +145,62 @@ async function get_all_previous_daily_data() {
     if (counter + 1 == total) clearInterval(timer);
   }, 510);
 }
+
+
+
+/* Gets a quote for [symbols] */
+get_quote('/ES')
+async function get_quote(symbols) {
+  logger.log("Get quote");
+  /* serialize the symbols */
+
+
+  try {
+
+    let now = new Date().getTime();
+    const options = {
+      url: `https://api.tdameritrade.com/v1/marketdata/quotes?symbol=/ES,/GC`,
+      // url: `https://api.tdameritrade.com/v1/marketdata/quotes?symbol=/ES,/GC,/CL,/NG,/SI,/ZB,/ZN`,
+      method: "get",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${access_token}`
+      }
+    };
+    var resp = await rp(options);
+    resp = JSON.parse(resp)
+    logger.log(resp)
+    logger.log(resp['/GC'])
+    return
+    var { candles, empty } = JSON.parse(resp);
+    if (empty) throw `${symbol} data is empty`;
+    // logger.log(candles)
+
+    logger.log(candles[candles.length - 1]);
+    logger.log("resp");
+    return candles[candles.length - 1];
+  } catch (err) {
+    logger.log("err");
+    logger.log(err);
+    // for (let k in err) {
+    //   logger.log(k);
+    // }
+    if (err.message) {
+      let expired_token = err.message.includes(
+        "The access token being passed has expired or is invalid"
+      );
+      if (expired_token) {
+        logger.log("get new token");
+        await request_new_access_token();
+        // get_minute_data(symbol);
+      }
+    }
+  }
+}
+
+
+
+
 
 
 /* Gets daily data for month, but just grab the last day and stick into DB */
@@ -196,7 +261,7 @@ async function get_minute_data(symbol, start, end) {
   try {
 
     const options = {
-      url: `https://api.tdameritrade.com/v1/marketdata/${symbol}/pricehistory?periodType=day&frequencyType=minute&frequency=1&endDate=${end}&startData=${start}`,
+      url: `https://api.tdameritrade.com/v1/marketdata/${symbol}/pricehistory?periodType=day&frequencyType=minute&frequency=1&endDate=${end}&startDate=${start}`,
       method: "get",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -211,15 +276,21 @@ async function get_minute_data(symbol, start, end) {
     // logger.log(candles[0]);
     // logger.log(candles[candles.length - 1]);
     logger.log(candles.length);
-    logger.log("resp");
+    logger.log("resp".green);
+
     return candles;
   } catch (err) {
-    logger.log("err");
-    logger.log(err);
-    handle_expired_token_error(err, get_minute_data, arguments[0]);
+    logger.log("err".red);
+    logger.log(err.message);
+    if(!err.message)logger.log(err)
+    let args = Array.from(arguments).join(',')
+    logger.log(args)
+    handle_expired_token_error(err, get_minute_data, args);
 
   }
 }
+
+
 async function request_all_movers() {
   const markets = ["$SPX.X", "$DJI", "$COMPX"];
   const total = markets.length;
@@ -299,7 +370,7 @@ async function request_all_movers() {
       setTimeout(async()=>{
         logger.log("ALL DONE GETTING MARKET MOVERS".green);
         logger.log(movers_data);
-        save_data('MOVERS', 'MOVERS.csv', JSON.stringify(movers_data), false)
+        save_data('TD_data','MOVERS', 'MOVERS.json', JSON.stringify(movers_data), false)
         return movers_data
       }, 6000)
 
@@ -396,9 +467,10 @@ async function handle_expired_token_error(err, fn, args) {
     if (expired_token) {
       logger.log("get new token");
       setTimeout(async () => {
-        logger.log("Getting new access token");
+        logger.log("Getting new access token".magenta);
         await request_new_access_token();
-        fn(args);
+        logger.log(args)
+        fn.call(args);
       }, 0);
     }
   }
@@ -439,10 +511,10 @@ async function request_historical_data(symbol) {
     if (empty) throw `${symbol} data is empty`;
     // logger.log(candles)
     logger.log(candles.length);
-    logger.log("resp");
+    logger.log("resp".green);
     return candles;
   } catch (err) {
-    logger.log("err");
+    logger.log("err".red);
     logger.log(err);
     // for (let k in err) {
     //   logger.log(k);
@@ -496,7 +568,7 @@ async function request_new_access_token() {
 
     logger.log(resp.access_token);
     access_token = resp.access_token;
-    files.write_access_token(access_token);
+    write_access_token(access_token);
 
     logger.log(
       `neeeeww access_token ${access_token

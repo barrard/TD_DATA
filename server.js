@@ -5,8 +5,8 @@ var request = require("request");
 // [1] Load SSL certificate and private key from files
 //
 var privateKey = fs.readFileSync("./keys/key.pem", "utf8");
-var certificate = fs.readFileSync("./keys/certificate.pem", "utf8");
-var credentials = { key: privateKey, cert: certificate };
+var certificate = fs.readFileSync("./keys/cert.pem", "utf8");
+var credentials = { key: privateKey, cert: certificate, passphrase:'password' };
 
 var express = require("express");
 var app = express();

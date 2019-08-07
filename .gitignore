@@ -3,3 +3,5 @@ node_modules
 keys
 access_token.js
 data/*
+TD_data/*
+*.csv

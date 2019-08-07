@@ -25,9 +25,9 @@ const {
   get_minute_data
 } = require("./request_historical_data.js");
 
-const DATA_DIR = "./data";
+const DATA_DIR = "./TD_data";
 
-get_all_minutely_data("MSFT");
+// get_all_minutely_data("MSFT");
 /* systematically get minutly data */
 async function get_all_minutely_data(symbol) {
   /* Look for the file */

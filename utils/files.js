@@ -12,8 +12,23 @@ module.exports = {
   close_fd,
   open_file,
   save_fd,
-  get_file_stats, w_trucate_fd
+  get_file_stats,
+  w_trucate_fd,
+  check_file_data
 };
+
+async function check_file_data(path) {
+  let exists = await fs.pathExists(path);
+  if (!exists) return false;
+
+  let buff = await read_file(path);
+  if (buff.length) {
+    logger.log(buff.length);
+    return buff.length;
+  } else {
+    return false;
+  }
+}
 
 async function get_file_stats(file) {
   try {
@@ -28,7 +43,7 @@ async function get_file_stats(file) {
 
 async function save_fd(fd, data) {
   try {
-    await fs.write(fd, data+'\r\n');
+    await fs.write(fd, data + "\r\n");
     await fs.close(fd);
   } catch (err) {
     logger.log("err".bgRed);
@@ -46,6 +61,10 @@ async function w_trucate_fd(file_path) {
 }
 async function open_file(file_path) {
   try {
+    /* first check of rexistance, and or create it */
+    let path = get_path(file_path);
+
+    let exists = await make_path_exist(path);
     /* Open file for read and append*/
     let appendable_fd = await fs.open(file_path, "a+");
     let file_stats = await get_file_stats(file_path);
@@ -94,10 +113,10 @@ async function read_file(file) {
   return buffer;
 }
 
-async function save_data(symbol, name, data, append) {
+async function save_data(dir, symbol, name, data, append) {
   try {
     logger.log(`writing ${symbol}, ${name}`);
-    let done = await write_file(`./data/${symbol}/${name}`, data, append);
+    let done = await write_file(`./${dir}/${symbol}/${name}`, data, append);
   } catch (err) {
     logger.log("err".bgRed);
     logger.log(err);
